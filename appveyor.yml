@@ -1,0 +1,41 @@
+max_jobs: 1
+
+image: Visual Studio 2017
+
+environment:
+  COVERALLS_REPO_TOKEN:
+    secure: FLG2WTxc1Gvrikrvj/UXnb9IAklUhPKGYV5pxOzlwsOWGQBiiEigRnyWCvCc2Zga
+  MYGET_TOKEN:
+    secure: yP12k1vrHJyValU1UWnW3NySjKfXlRomR8p4qqmYs26FDztsGMlCQeT5jdCVHlz6
+
+cache:
+  - '%LocalAppData%\NuGet\v3-cache'
+
+nuget:
+  account_feed: false
+  project_feed: false
+  disable_publish_on_pr: true
+
+install:
+  - cmd: dotnet tool install -g Cake.Tool --version 0.30.0
+  - cmd: dotnet tool install coveralls.net --tool-path tools
+
+build_script:
+  - cmd: dotnet cake --target=Full
+
+after_build:
+  - ps: if ($env:COVERALLS_REPO_TOKEN -ne $null) { .\tools\csmacnz.coveralls.exe --reportgenerator -i .\outputs\tests\report --repoToken $env:COVERALLS_REPO_TOKEN --commitId $env:APPVEYOR_REPO_COMMIT --commitBranch $env:APPVEYOR_REPO_BRANCH --commitAuthor $env:APPVEYOR_REPO_COMMIT_AUTHOR --commitEmail $env:APPVEYOR_REPO_COMMIT_AUTHOR_EMAIL --commitMessage $env:APPVEYOR_REPO_COMMIT_MESSAGE --jobId $env:APPVEYOR_JOB_ID }
+
+
+artifacts:
+  - path: outputs\*.nupkg
+    name: packages
+  - path: outputs\*.snupkg
+    name: symbols
+
+deploy:
+  provider: NuGet
+  server: https://www.myget.org/F/nybus/api/v2/package
+  api_key:
+    secure: yP12k1vrHJyValU1UWnW3NySjKfXlRomR8p4qqmYs26FDztsGMlCQeT5jdCVHlz6
+  artifact: packages
