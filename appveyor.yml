@@ -35,7 +35,8 @@ artifacts:
 
 deploy:
   provider: NuGet
-  server: https://www.myget.org/F/nybus/api/v2/package
+  server: https://www.myget.org/F/kralizek/api/v2/package
   api_key:
-    secure: yP12k1vrHJyValU1UWnW3NySjKfXlRomR8p4qqmYs26FDztsGMlCQeT5jdCVHlz6
+    secure: 9/EVrHzEDrzcH6oOEfs2NVxmiQltnjXCBnaK+kY2VC8rjpgJ149BYyaxkbKAH14M
   artifact: packages
+
