@@ -4,7 +4,7 @@ image: Visual Studio 2017
 
 environment:
   COVERALLS_REPO_TOKEN:
-    secure: FLG2WTxc1Gvrikrvj/UXnb9IAklUhPKGYV5pxOzlwsOWGQBiiEigRnyWCvCc2Zga
+    secure: fN/bRsMS9BQkIpnewq8ZzYXN7xW8AFmm7xP05H+F2FaitfSFIVY3lJl78iMQpMC1
   MYGET_TOKEN:
     secure: yP12k1vrHJyValU1UWnW3NySjKfXlRomR8p4qqmYs26FDztsGMlCQeT5jdCVHlz6
 
