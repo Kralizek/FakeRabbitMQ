@@ -8,7 +8,7 @@ namespace FakeRabbitMQ {
     public class FakeConnection : IConnection
     {
         private readonly FakeServer _server;
-        public IList<FakeChannel> Channels { get; private set; }
+        public List<FakeChannel> Channels { get; } = new List<FakeChannel>();
 
         public FakeConnection(FakeServer server)
         {
@@ -25,20 +25,11 @@ namespace FakeRabbitMQ {
 
         public void Dispose() { }
 
-        public void Abort()
-        {
-            Abort(1, null, 0);
-        }
+        public void Abort() => Abort(1, null, 0);
 
-        public void Abort(ushort reasonCode, string reasonText)
-        {
-            Abort(reasonCode, reasonText, 0);
-        }
+        public void Abort(ushort reasonCode, string reasonText) => Abort(reasonCode, reasonText, 0);
 
-        public void Abort(int timeout)
-        {
-            Abort(1, null, timeout);
-        }
+        public void Abort(int timeout) => Abort(1, null, timeout);
 
         public void Abort(ushort reasonCode, string reasonText, int timeout)
         {
@@ -47,27 +38,18 @@ namespace FakeRabbitMQ {
             CloseReason = new ShutdownEventArgs(ShutdownInitiator.Library, reasonCode, reasonText);
         }
 
-        public void Close()
-        {
-            throw new NotImplementedException();
-        }
+        public void Close() => Close(1, null, 0);
 
-        public void Close(ushort reasonCode, string reasonText)
-        {
-            throw new NotImplementedException();
-        }
+        public void Close(ushort reasonCode, string reasonText) => Close(reasonCode, reasonText, 0);
 
-        public void Close(int timeout)
-        {
-            throw new NotImplementedException();
-        }
+        public void Close(int timeout) => Close(1, null, timeout);
 
         public void Close(ushort reasonCode, string reasonText, int timeout)
         {
             IsOpen = false;
             CloseReason = new ShutdownEventArgs(ShutdownInitiator.Library, reasonCode, reasonText);
 
-
+            Channels.ForEach(c => c.Close());
         }
 
         public IModel CreateModel()
@@ -81,27 +63,40 @@ namespace FakeRabbitMQ {
 
         public void HandleConnectionBlocked(string reason)
         {
-            throw new NotImplementedException();
+            
         }
 
         public void HandleConnectionUnblocked()
         {
-            throw new NotImplementedException();
+            
         }
 
         public bool AutoClose { get; set; }
+
         public ushort ChannelMax { get; }
+
         public IDictionary<string, object> ClientProperties { get; }
+
         public ShutdownEventArgs CloseReason { get; set; }
+
         public AmqpTcpEndpoint Endpoint { get; }
+
         public uint FrameMax { get; }
+
         public ushort Heartbeat { get; }
+
         public bool IsOpen { get; set; }
+
         public AmqpTcpEndpoint[] KnownHosts { get; }
+
         public IProtocol Protocol { get; }
+
         public IDictionary<string, object> ServerProperties { get; }
+
         public IList<ShutdownReportEntry> ShutdownReport { get; }
+
         public string ClientProvidedName { get; }
+
         public ConsumerWorkService ConsumerWorkService { get; }
         public event EventHandler<CallbackExceptionEventArgs> CallbackException;
         public event EventHandler<EventArgs> RecoverySucceeded;
