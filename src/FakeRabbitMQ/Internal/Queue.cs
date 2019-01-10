@@ -8,7 +8,7 @@ namespace FakeRabbitMQ.Internal
     {
         public Queue(string name, bool isDurable, bool isExclusive, bool isAutoDelete, IDictionary<string, object> arguments = null)
         {
-            Name = string.IsNullOrEmpty(name) ? GenerateQueueName() : name;
+            Name = name ?? GenerateQueueName();
             IsDurable = isDurable;
             IsExclusive = isExclusive;
             IsAutoDelete = isAutoDelete;

@@ -37,7 +37,7 @@ namespace FakeRabbitMQ.Internal
         {
             Messages.Enqueue(message);
 
-            if (string.IsNullOrWhiteSpace(message.RoutingKey))
+            if (!string.IsNullOrWhiteSpace(message.RoutingKey))
             {
                 foreach (var binding in Bindings)
                 {
