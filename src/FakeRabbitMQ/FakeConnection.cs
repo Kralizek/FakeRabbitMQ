@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Net;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Framing;
 
 namespace FakeRabbitMQ {
     public class FakeConnection : IConnection
     {
         private readonly FakeServer _server;
-        public List<FakeChannel> Channels { get; } = new List<FakeChannel>();
+        private readonly List<FakeChannel> _channels = new List<FakeChannel>();
 
         public FakeConnection(FakeServer server)
         {
@@ -36,6 +37,8 @@ namespace FakeRabbitMQ {
             IsOpen = false;
 
             CloseReason = new ShutdownEventArgs(ShutdownInitiator.Library, reasonCode, reasonText);
+
+            _channels.ForEach(c => c.Abort(reasonCode, reasonText));
         }
 
         public void Close() => Close(1, null, 0);
@@ -49,14 +52,14 @@ namespace FakeRabbitMQ {
             IsOpen = false;
             CloseReason = new ShutdownEventArgs(ShutdownInitiator.Library, reasonCode, reasonText);
 
-            Channels.ForEach(c => c.Close());
+            _channels.ForEach(c => c.Close(reasonCode, reasonText));
         }
 
         public IModel CreateModel()
         {
             var channel = new FakeChannel(_server);
 
-            Channels.Add(channel);
+            _channels.Add(channel);
 
             return channel;
         }
@@ -75,9 +78,9 @@ namespace FakeRabbitMQ {
 
         public ushort ChannelMax { get; }
 
-        public IDictionary<string, object> ClientProperties { get; }
+        public IDictionary<string, object> ClientProperties { get; } = new Dictionary<string, object>();
 
-        public ShutdownEventArgs CloseReason { get; set; }
+        public ShutdownEventArgs CloseReason { get; private set; }
 
         public AmqpTcpEndpoint Endpoint { get; }
 
@@ -85,24 +88,30 @@ namespace FakeRabbitMQ {
 
         public ushort Heartbeat { get; }
 
-        public bool IsOpen { get; set; }
+        public bool IsOpen { get; private set; } = true;
 
-        public AmqpTcpEndpoint[] KnownHosts { get; }
+        public AmqpTcpEndpoint[] KnownHosts { get; set; }
 
-        public IProtocol Protocol { get; }
+        public IProtocol Protocol { get; } = new Protocol();
 
-        public IDictionary<string, object> ServerProperties { get; }
+        public IDictionary<string, object> ServerProperties { get; } = new Dictionary<string, object>();
 
-        public IList<ShutdownReportEntry> ShutdownReport { get; }
+        public IList<ShutdownReportEntry> ShutdownReport { get; } = new List<ShutdownReportEntry>();
 
         public string ClientProvidedName { get; }
 
         public ConsumerWorkService ConsumerWorkService { get; }
+
         public event EventHandler<CallbackExceptionEventArgs> CallbackException;
+
         public event EventHandler<EventArgs> RecoverySucceeded;
+
         public event EventHandler<ConnectionRecoveryErrorEventArgs> ConnectionRecoveryError;
+
         public event EventHandler<ConnectionBlockedEventArgs> ConnectionBlocked;
+
         public event EventHandler<ShutdownEventArgs> ConnectionShutdown;
+
         public event EventHandler<EventArgs> ConnectionUnblocked;
     }
 }

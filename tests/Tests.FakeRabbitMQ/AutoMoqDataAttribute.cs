@@ -1,7 +1,9 @@
 ﻿using AutoFixture;
 using AutoFixture.AutoMoq;
+using AutoFixture.Kernel;
 using AutoFixture.NUnit3;
 using FakeRabbitMQ;
+using FakeRabbitMQ.Internal;
 
 namespace Tests
 {
@@ -24,6 +26,8 @@ namespace Tests
             fixture.Customize<FakeConnection>(o => o.OmitAutoProperties());
 
             fixture.Customize<FakeChannel>(o => o.OmitAutoProperties());
+
+            fixture.Customizations.Add(new TypeRelay(typeof(ExchangeType), typeof(string)));
 
             return fixture;
         }

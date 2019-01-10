@@ -1,48 +1,43 @@
 using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using FakeRabbitMQ.Internal;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using RabbitMQ.Client.Impl;
 using BasicProperties = RabbitMQ.Client.Framing.BasicProperties;
+using ExchangeType = FakeRabbitMQ.Internal.ExchangeType;
 using Queue = FakeRabbitMQ.Internal.Queue;
 
 namespace FakeRabbitMQ
 {
     public class FakeChannel : IModel
-    {       
+    {
         public FakeServer Server { get; }
 
         public FakeChannel(FakeServer server)
         {
             Server = server ?? throw new ArgumentNullException(nameof(server));
         }
-        
+
         public IEnumerable<Message> GetMessagesPublishedToExchange(string exchange)
         {
-            Server.Exchanges.TryGetValue(exchange, out var exchangeInstance);
-
-            if (exchangeInstance == null)
+            if (!Server.TryGetExchangeByName(exchange, out var instance))
             {
-                return new List<Message>();
+                return Array.Empty<Message>();
             }
 
-            return exchangeInstance.Messages;
+            return instance.Messages;
         }
 
-        public IEnumerable<Message> GetMessagesOnQueue(string queueName)
+        public IEnumerable<Message> GetMessagesOnQueue(string queue)
         {
-            Server.Queues.TryGetValue(queueName, out var queueInstance);
-
-            if (queueInstance == null)
+            if (!Server.TryGetQueueByName(queue, out var instance))
             {
-                return new List<Message>();
+                return Array.Empty<Message>();
             }
 
-            return queueInstance.Messages;
+            return instance.Messages;
         }
 
         public bool ApplyPrefetchToAllChannels { get; private set; }
@@ -50,10 +45,7 @@ namespace FakeRabbitMQ
         public uint PrefetchSize { get; private set; }
         public bool IsChannelFlowActive { get; private set; }
 
-        public void Dispose()
-        {
-
-        }
+        public void Dispose() { }
 
         public IBasicPublishBatch CreateBasicPublishBatch()
         {
@@ -77,22 +69,16 @@ namespace FakeRabbitMQ
 
         public void ExchangeDeclare(string exchange, string type, bool durable, bool autoDelete = false, IDictionary<string, object> arguments = null)
         {
-            var exchangeInstance = new Exchange
-            {
-                Name = exchange,
-                Type = type,
-                IsDurable = durable,
-                AutoDelete = autoDelete,
-                Arguments = arguments as IDictionary
-            };
-            Server.Exchanges.AddOrUpdate(exchange, exchangeInstance, (name, existing) => existing);
+            var exchangeInstance = new Exchange(exchange, type, durable, autoDelete, arguments);
+
+            Server.AddExchange(exchangeInstance);
         }
 
         public void ExchangeDeclarePassive(string exchange) => ExchangeDeclare(exchange, type: null, durable: false, autoDelete: false, arguments: null);
 
         public void ExchangeDeclareNoWait(string exchange, string type, bool durable, bool autoDelete, IDictionary<string, object> arguments) => ExchangeDeclare(exchange, type, durable, autoDelete: false, arguments: arguments);
 
-        public void ExchangeDelete(string exchange, bool ifUnused) => Server.Exchanges.TryRemove(exchange, out _);
+        public void ExchangeDelete(string exchange, bool ifUnused) => Server.TryRemoveExchange(exchange, out _);
 
         public void ExchangeDeleteNoWait(string exchange, bool ifUnused) => ExchangeDelete(exchange, ifUnused: false);
 
@@ -108,42 +94,27 @@ namespace FakeRabbitMQ
 
         public void ExchangeBind(string destination, string source, string routingKey, IDictionary<string, object> arguments = null)
         {
-            Server.Exchanges.TryGetValue(source, out var exchange);
-
-            Server.Queues.TryGetValue(destination, out var queue);
-
-            var binding = new Binding { Exchange = exchange, Queue = queue, RoutingKey = routingKey };
-
-            exchange?.Bindings.AddOrUpdate(binding.Key, binding, (k, v) => binding);
-            queue?.Bindings.AddOrUpdate(binding.Key, binding, (k, v) => binding);
+            if (Server.TryGetExchangeByName(source, out var exchange) && Server.TryGetQueueByName(destination, out var queue))
+            {
+                exchange.BindToQueue(queue, routingKey, arguments);
+            }
         }
 
         public void ExchangeUnbind(string destination, string source, string routingKey, IDictionary<string, object> arguments = null)
         {
-            Server.Exchanges.TryGetValue(source, out var exchange);
-
-            Server.Queues.TryGetValue(destination, out var queue);
-
-            var binding = new Binding { Exchange = exchange, Queue = queue, RoutingKey = routingKey };
-
-            if (exchange != null)
+            if (Server.TryGetExchangeByName(source, out var exchange) && Server.TryGetQueueByName(destination, out var queue))
             {
-                exchange.Bindings.TryRemove(binding.Key, out _);
-            }
-
-            if (queue != null)
-            {
-                queue.Bindings.TryRemove(binding.Key, out _);
+                exchange.UnbindFromQueue(queue, routingKey);
             }
         }
 
-        public QueueDeclareOk QueueDeclarePassive(string queue) => QueueDeclare(queue, durable: false, exclusive: false, autoDelete: false, arguments: null);
+        public QueueDeclareOk QueueDeclarePassive(string queue) => QueueDeclare(queue);
 
         public uint MessageCount(string queue)
         {
-            if (Server.Queues.TryGetValue(queue, out var q))
+            if (Server.TryGetQueueByName(queue, out var q))
             {
-                return (uint) q.Messages.Count;
+                return (uint)q.Messages.Count;
             }
 
             return 0u;
@@ -161,18 +132,9 @@ namespace FakeRabbitMQ
 
         public QueueDeclareOk QueueDeclare(string queue = null, bool durable = false, bool exclusive = false, bool autoDelete = false, IDictionary<string, object> arguments = null)
         {
-            queue = queue ?? Guid.NewGuid().ToString("N");
+            var queueInstance = new Queue(queue, durable, exclusive, autoDelete, arguments);
 
-            var queueInstance = new Queue
-            {
-                Name = queue,
-                IsDurable = durable,
-                IsExclusive = exclusive,
-                IsAutoDelete = autoDelete,
-                Arguments = arguments as IDictionary
-            };
-
-            Server.Queues.AddOrUpdate(queue, queueInstance, (name, existing) => existing);
+            Server.AddQueue(queueInstance);
 
             return new QueueDeclareOk(queue, 0, 0);
         }
@@ -189,7 +151,7 @@ namespace FakeRabbitMQ
 
         public uint QueuePurge(string queue)
         {
-            Server.Queues.TryGetValue(queue, out var instance);
+            Server.TryGetQueueByName(queue, out var instance);
 
             if (instance == null)
             {
@@ -206,7 +168,7 @@ namespace FakeRabbitMQ
 
         public uint QueueDelete(string queue, bool ifUnused = false, bool ifEmpty = false)
         {
-            Server.Queues.TryRemove(queue, out var instance);
+            Server.TryRemoveQueue(queue, out var instance);
 
             return instance != null ? 1u : 0u;
         }
@@ -264,9 +226,7 @@ namespace FakeRabbitMQ
 
         public string BasicConsume(string queue, bool noAck, string consumerTag, bool noLocal, bool exclusive, IDictionary<string, object> arguments, IBasicConsumer consumer)
         {
-            Server.Queues.TryGetValue(queue, out var queueInstance);
-
-            if (queueInstance != null)
+            if (Server.TryGetQueueByName(queue, out var queueInstance))
             {
                 _consumers.AddOrUpdate(consumerTag, consumer, (s, basicConsumer) => basicConsumer);
 
@@ -318,22 +278,17 @@ namespace FakeRabbitMQ
 
         public BasicGetResult BasicGet(string queue, bool noAck)
         {
-            if (!Server.Queues.TryGetValue(queue, out var queueInstance))
+            if (!Server.TryGetQueueByName(queue, out var instance) || !instance.Messages.TryDequeue(out var message))
             {
                 return null;
             }
 
-            if (!queueInstance.Messages.TryDequeue(out var message))
-            {
-                return null;
-            }
-            
             Interlocked.Increment(ref _lastDeliveryTag);
             var deliveryTag = Convert.ToUInt64(_lastDeliveryTag);
             const bool redelivered = false;
             var exchange = message.Exchange;
             var routingKey = message.RoutingKey;
-            var messageCount = Convert.ToUInt32(queueInstance.Messages.Count);
+            var messageCount = Convert.ToUInt32(instance.Messages.Count);
             var basicProperties = message.BasicProperties ?? CreateBasicProperties();
             var body = message.Body;
 
@@ -366,45 +321,31 @@ namespace FakeRabbitMQ
 
         public void BasicPublish(string exchange, string routingKey, bool mandatory, bool immediate, IBasicProperties basicProperties, byte[] body)
         {
-            var parameters = new Message
-            {
-                Exchange = exchange,
-                RoutingKey = routingKey,
-                Mandatory = mandatory,
-                Immediate = immediate,
-                BasicProperties = basicProperties,
-                Body = body
-            };
+            var message = new Message(exchange, mandatory, immediate, body, basicProperties, routingKey);
 
-            Func<string, Exchange> addExchange = s =>
-            {
-                var newExchange = new Exchange
-                {
-                    Name = exchange,
-                    Arguments = null,
-                    AutoDelete = false,
-                    IsDurable = false,
-                    Type = "direct"
-                };
-                newExchange.PublishMessage(parameters);
-
-                return newExchange;
-            };
-            Func<string, Exchange, Exchange> updateExchange = (s, existingExchange) =>
-            {
-                existingExchange.PublishMessage(parameters);
-
-                return existingExchange;
-            };
-            Server.Exchanges.AddOrUpdate(exchange, addExchange, updateExchange);
+            Server.AddOrUseExchange(exchange, CreateExchange, UseExisting);
 
             NextPublishSeqNo++;
-        }
 
+            Exchange CreateExchange(string exchangeName)
+            {
+                var newExchange = new Exchange(exchangeName, ExchangeType.Direct, false, false);
+                newExchange.PublishMessage(message);
+
+                return newExchange;
+            }
+
+            Exchange UseExisting(string _, Exchange existingExchange)
+            {
+                existingExchange.PublishMessage(message);
+
+                return existingExchange;
+            }
+        }
 
         public void BasicAck(ulong deliveryTag, bool multiple)
         {
-            if (_workingMessages.TryRemove(deliveryTag, out var message) && Server.Queues.TryGetValue(message.Queue, out var queue))
+            if (_workingMessages.TryRemove(deliveryTag, out var message) && Server.TryGetQueueByName(message.Queue, out var queue))
             {
                 queue.Messages.TryDequeue(out message);
             }
@@ -417,7 +358,7 @@ namespace FakeRabbitMQ
 
         public void BasicNack(ulong deliveryTag, bool multiple, bool requeue)
         {
-            if (_workingMessages.TryRemove(deliveryTag, out var message) && requeue && Server.Queues.TryGetValue(message.Queue, out var queue))
+            if (_workingMessages.TryRemove(deliveryTag, out var message) && requeue && Server.TryGetQueueByName(message.Queue, out var queue))
             {
                 queue.PublishMessage(message);
             }
@@ -429,7 +370,7 @@ namespace FakeRabbitMQ
             {
                 foreach (var message in _workingMessages)
                 {
-                    if (Server.Queues.TryGetValue(message.Value.Queue, out var queueInstance))
+                    if (Server.TryGetQueueByName(message.Value.Queue, out var queueInstance))
                     {
                         queueInstance.PublishMessage(message.Value);
                     }
@@ -490,7 +431,7 @@ namespace FakeRabbitMQ
         public bool IsOpen { get; set; }
 
         public bool IsClosed { get; set; }
-        
+
         public ulong NextPublishSeqNo { get; set; }
 
         public TimeSpan ContinuationTimeout { get; set; }

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
@@ -7,25 +6,36 @@ namespace FakeRabbitMQ.Internal
 {
     public class Queue
     {
-        public string Name { get; set; }
+        public Queue(string name, bool isDurable, bool isExclusive, bool isAutoDelete, IDictionary<string, object> arguments = null)
+        {
+            Name = string.IsNullOrEmpty(name) ? GenerateQueueName() : name;
+            IsDurable = isDurable;
+            IsExclusive = isExclusive;
+            IsAutoDelete = isAutoDelete;
+            Arguments = arguments ?? new Dictionary<string, object>();
+        }
 
-        public bool IsDurable { get; set; }
+        private static string GenerateQueueName() => Guid.NewGuid().ToString("N");
 
-        public bool IsExclusive { get; set; }
+        public string Name { get; }
 
-        public bool IsAutoDelete { get; set; }
+        public bool IsDurable { get; }
 
-        public IDictionary Arguments = new Dictionary<string, object>();
+        public bool IsExclusive { get; }
 
-        public ConcurrentQueue<Message> Messages = new ConcurrentQueue<Message>();
-        public ConcurrentDictionary<string, Binding> Bindings = new ConcurrentDictionary<string, Binding>();
+        public bool IsAutoDelete { get; }
+
+        public IDictionary<string, object> Arguments { get; }
+
+        public ConcurrentQueue<Message> Messages { get; } = new ConcurrentQueue<Message>();
+
+        public ConcurrentDictionary<string, Binding> Bindings { get; } = new ConcurrentDictionary<string, Binding>();
 
         public event EventHandler<Message> MessagePublished = (sender, message) => { };
 
         public void PublishMessage(Message message)
         {
-            var queueMessage = message.Clone();
-            queueMessage.Queue = Name;
+            var queueMessage = message.Clone(name: Name);
 
             Messages.Enqueue(queueMessage);
 

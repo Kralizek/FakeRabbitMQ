@@ -1,13 +1,34 @@
-﻿namespace FakeRabbitMQ.Internal
+﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+
+namespace FakeRabbitMQ.Internal
 {
     public class Binding
     {
-        public string RoutingKey { get; set; }
+        public Binding(Exchange exchange, Queue queue, string routingKey = null, IDictionary<string, object> arguments = null)
+        {
+            Exchange = exchange ?? throw new ArgumentNullException(nameof(exchange));
+            Queue = queue ?? throw new ArgumentNullException(nameof(queue));
+            Arguments = arguments ?? new Dictionary<string, object>();
+            RoutingKey = routingKey;
+        }
 
-        public Exchange Exchange { get; set; }
+        public string RoutingKey { get; }
 
-        public Queue Queue { get; set; }
+        public Exchange Exchange { get; }
+
+        public Queue Queue { get; }
+
+        public IDictionary<string, object> Arguments { get; }
 
         public string Key => $"{Exchange.Name}|{RoutingKey}|{Queue.Name}";
+
+        public void AttachTo(ConcurrentDictionary<string, Binding> bindings)
+        {
+            bindings.AddOrUpdate(Key, this, (s, b) => b);
+        }
+
+        public bool RemoveFrom(ConcurrentDictionary<string, Binding> bindings) => bindings.TryRemove(Key, out _);
     }
 }
